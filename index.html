@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>环境小卫士</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 50%, #80deea 100%);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 20%),
+                radial-gradient(circle at 90% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 20%),
+                radial-gradient(circle at 50% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 20%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding-top: 60px;
+            position: relative;
+            z-index: 1;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #ff9a9e, #fad0c4);
+        }
+        .chart-container {
+            position: relative;
+            height: 200px;
+            margin-top: 10px;
+        }
+        .value-display {
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+            margin: 15px 0;
+            color: #4a4a4a;
+        }
+        .unit {
+            font-size: 18px;
+            color: #666;
+            margin-left: 5px;
+        }
+        .sensor-icon {
+            font-size: 40px;
+            text-align: center;
+            margin-bottom: 10px;
+            color: #ff9a9e;
+        }
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        button {
+            background: linear-gradient(45deg, #ff9a9e, #fad0c4);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        .status {
+            padding: 12px 25px;
+            border-radius: 25px;
+            font-size: 18px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 500px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status::before {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: currentColor;
+            margin-right: 5px;
+        }
+        .status:hover {
+            max-width: none;
+            white-space: normal;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+        .connected {
+            background: linear-gradient(45deg, #a8e6cf, #dcedc1);
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        .disconnected {
+            background: linear-gradient(45deg, #ff9a9e, #fad0c4);
+            color: #2c3e50;
+        }
+        .error {
+            background: linear-gradient(45deg, #ff6b6b, #ff8787);
+            color: white;
+            animation: shake 0.5s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .stat-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 15px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            color: #ff9a9e;
+            margin: 5px 0;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 20px;
+        }
+        .user-avatar {
+            font-size: 24px;
+            color: #ff9a9e;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .user-avatar:hover {
+            transform: scale(1.1);
+        }
+        .user-details {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            padding: 20px;
+            z-index: 1000;
+            min-width: 250px;
+        }
+        .user-details-content h3 {
+            margin: 0 0 15px 0;
+            color: #4a4a4a;
+            font-size: 18px;
+        }
+        .user-details-content p {
+            margin: 10px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .user-details-content strong {
+            color: #4a4a4a;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 24px;
+            color: #666;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+        .modal-close:hover {
+            color: #ff9a9e;
+        }
+        .modal-title {
+            margin: 0 0 20px 0;
+            color: #4a4a4a;
+            font-size: 24px;
+            text-align: center;
+        }
+        .modal-chart {
+            height: 400px;
+            margin-top: 20px;
+        }
+        .card-title {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .card-title i {
+            font-size: 24px;
+            color: #ff9a9e;
+        }
+        h2 {
+            margin: 0;
+            color: #4a4a4a;
+            font-size: 24px;
+        }
+        /* 添加数值变化动画样式 */
+        .value-changing {
+            animation: valueChange 1s ease;
+        }
+
+        .value-increasing {
+            color: #ff6b6b;
+            position: relative;
+        }
+
+        .value-increasing::after {
+            content: '↑';
+            position: absolute;
+            right: -20px;
+            animation: fadeOut 1s ease forwards;
+        }
+
+        .value-decreasing {
+            color: #4ecdc4;
+            position: relative;
+        }
+
+        .value-decreasing::after {
+            content: '↓';
+            position: absolute;
+            right: -20px;
+            animation: fadeOut 1s ease forwards;
+        }
+
+        /* 添加警告闪烁效果 */
+        .blink-warning {
+            animation: blink 1s ease infinite;
+            color: #ff4444;
+            font-weight: bold;
+        }
+
+        @keyframes blink {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.3;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        @keyframes valueChange {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        @keyframes fadeOut {
+            0% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+            }
+        }
+
+        /* 添加数据接收动画 */
+        .data-receiving {
+            position: relative;
+        }
+        .data-receiving::after {
+            content: '';
+            position: absolute;
+            right: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #4ecdc4;
+            animation: pulse 1s ease infinite;
+        }
+
+        /* 添加卡片加载动画 */
+        .card-loading {
+            position: relative;
+            overflow: hidden;
+        }
+        .card-loading::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.4),
+                transparent
+            );
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: translateY(-50%) scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: translateY(-50%) scale(1.5);
+                opacity: 0.5;
+            }
+            100% {
+                transform: translateY(-50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes shimmer {
+            0% {
+                left: -100%;
+            }
+            100% {
+                left: 200%;
+            }
+        }
+
+        /* 添加数据更新提示 */
+        .data-update-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        .data-update-toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* 添加帮助提示样式 */
+        .help-icon {
+            cursor: pointer;
+            color: #666;
+            transition: color 0.3s ease;
+            margin-left: 5px;
+        }
+        .help-icon:hover {
+            color: #ff9a9e;
+        }
+        .help-tooltip {
+            position: fixed;
+            background: rgba(255, 255, 255, 0.98);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 280px;
+            z-index: 1000;
+            display: none;
+            backdrop-filter: blur(10px);
+            transform: translateY(10px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        .help-tooltip.show {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .help-tooltip h4 {
+            margin: 0 0 10px 0;
+            color: #ff9a9e;
+            font-size: 16px;
+        }
+        .help-tooltip p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #666;
+            line-height: 1.5;
+        }
+        .help-tooltip .safe-range {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .help-tooltip .safe-range span {
+            color: #4ecdc4;
+            font-weight: bold;
+        }
+
+        /* 添加评分系统样式 */
+        .score-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .score-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .score-title {
+            font-size: 20px;
+            color: #4a4a4a;
+            margin: 0;
+        }
+        .score-value {
+            font-size: 36px;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+            color: #4ecdc4;
+        }
+        .score-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .score-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 15px;
+            text-align: center;
+        }
+        .score-item-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .score-item-value {
+            font-size: 20px;
+            color: #ff9a9e;
+            font-weight: bold;
+        }
+        .score-suggestion {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            font-size: 14px;
+            color: #666;
+            line-height: 1.5;
+        }
+        .score-badge {
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .score-excellent {
+            background: #a8e6cf;
+            color: #2c3e50;
+        }
+        .score-good {
+            background: #dcedc1;
+            color: #2c3e50;
+        }
+        .score-fair {
+            background: #ffd3b6;
+            color: #2c3e50;
+        }
+        .score-poor {
+            background: #ff9a9e;
+            color: white;
+        }
+        .guardian-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: #4ecdc4;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .guardian-badge i {
+            font-size: 18px;
+        }
+        /* 数据更新动画效果 */
+        @keyframes dataUpdate {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .value-updating {
+            animation: dataUpdate 0.5s ease;
+        }
+
+        .value-warning {
+            animation: warningPulse 1s infinite;
+        }
+
+        @keyframes warningPulse {
+            0% { color: inherit; }
+            50% { color: #ff4444; }
+            100% { color: inherit; }
+        }
+
+        /* 数据接收动画 */
+        .data-receiving-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #4ecdc4;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* 连接状态详情 */
+        .connection-details {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: none;
+            z-index: 1000;
+            min-width: 200px;
+        }
+
+        .connection-details.show {
+            display: block;
+        }
+
+        /* 响应式布局优化 */
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            
+            .score-details {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .header-right {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        /* 加载动画 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            display: none;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #4ecdc4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 通知样式 */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            z-index: 2000;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.warning {
+            border-left: 4px solid #ff4444;
+        }
+
+        .notification.success {
+            border-left: 4px solid #4ecdc4;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <div id="status" class="status disconnected">
+                等待连接...
+                <div class="connection-details" id="connectionDetails">
+                    <p><strong>连接时间：</strong><span id="connectionTime">--</span></p>
+                    <p><strong>数据频率：</strong><span id="dataFrequency">--</span></p>
+                    <p><strong>最后更新：</strong><span id="lastUpdate">--</span></p>
+                </div>
+            </div>
+            <div class="guardian-badge">
+                <i class="ri-shield-check-line"></i>
+                <span>幼儿健康小卫士</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="user-info" id="userInfo">
+                <i class="ri-user-line user-avatar"></i>
+                <span id="username">用户</span>
+            </div>
+            <div class="user-details" id="userDetails" style="display: none;">
+                <div class="user-details-content">
+                    <h3>用户信息</h3>
+                    <p><strong>用户名：</strong><span id="detailUsername">用户</span></p>
+                    <p><strong>登录时间：</strong><span id="loginTime">--</span></p>
+                    <p><strong>设备状态：</strong><span id="deviceStatus">未连接</span></p>
+                </div>
+            </div>
+            <button id="connectButton">连接设备</button>
+            <button id="disconnectButton" style="display: none;">断开连接</button>
+            <button id="logoutButton">退出登录</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- 环境质量评分卡片 -->
+        <div class="score-card" style="grid-column: 1 / -1;">
+            <div class="score-header">
+                <h2 class="score-title">环境质量评分</h2>
+                <span class="score-badge" id="scoreBadge">--</span>
+            </div>
+            <div class="score-value" id="totalScore">--</div>
+            <div class="score-details">
+                <div class="score-item">
+                    <div class="score-item-label">温度得分</div>
+                    <div class="score-item-value" id="tempScore">--</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-item-label">湿度得分</div>
+                    <div class="score-item-value" id="humidScore">--</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-item-label">甲醛得分</div>
+                    <div class="score-item-value" id="formScore">--</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-item-label">PM2.5得分</div>
+                    <div class="score-item-value" id="pmScore">--</div>
+                </div>
+            </div>
+            <div class="score-suggestion" id="scoreSuggestion">
+                等待数据更新...
+            </div>
+        </div>
+
+        <!-- 实时数据卡片 -->
+        <div class="card" id="tempHumidCard">
+            <div class="card-title">
+                <i class="ri-temp-hot-line"></i>
+                <h2>温湿度</h2>
+                <i class="ri-question-line help-icon" data-tooltip="tempHumidHelp"></i>
+            </div>
+            <div class="help-tooltip" id="tempHumidHelp">
+                <h4>温湿度说明</h4>
+                <p>温度：表示室内空气的温度，影响人体舒适度和健康。</p>
+                <p>湿度：表示空气中水蒸气的含量，影响呼吸系统和皮肤健康。</p>
+                <div class="safe-range">
+                    <p>安全范围：</p>
+                    <p>温度：<span>18-28°C</span></p>
+                    <p>湿度：<span>30-70%</span></p>
+                </div>
+            </div>
+            <div class="sensor-icon">
+                <i class="ri-sun-cloudy-line"></i>
+            </div>
+            <div class="value-display">
+                <span id="temperature">--</span><span class="unit">°C</span>
+                <span id="humidity">--</span><span class="unit">%</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="tempHumidChart"></canvas>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">平均温度</div>
+                    <div class="stat-value" id="avgTemp">--</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">平均湿度</div>
+                    <div class="stat-value" id="avgHumid">--</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card" id="formaldehydeCard">
+            <div class="card-title">
+                <i class="ri-wind-line"></i>
+                <h2>甲醛</h2>
+                <i class="ri-question-line help-icon" data-tooltip="formaldehydeHelp"></i>
+            </div>
+            <div class="help-tooltip" id="formaldehydeHelp">
+                <h4>甲醛说明</h4>
+                <p>甲醛是一种常见的有害气体，主要来源于装修材料、家具等。</p>
+                <p>长期接触高浓度甲醛可能导致呼吸道疾病和过敏反应。</p>
+                <div class="safe-range">
+                    <p>安全范围：</p>
+                    <p>室内标准：<span>≤0.08mg/m³</span></p>
+                    <p>儿童房标准：<span>≤0.06mg/m³</span></p>
+                </div>
+            </div>
+            <div class="sensor-icon">
+                <i class="ri-leaf-line"></i>
+            </div>
+            <div class="value-display">
+                <span id="formaldehyde">--</span><span class="unit">mg/m³</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="formaldehydeChart"></canvas>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">平均值</div>
+                    <div class="stat-value" id="avgFormaldehyde">--</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">最高值</div>
+                    <div class="stat-value" id="maxFormaldehyde">--</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card" id="pm25Card">
+            <div class="card-title">
+                <i class="ri-cloudy-line"></i>
+                <h2>PM2.5</h2>
+                <i class="ri-question-line help-icon" data-tooltip="pm25Help"></i>
+            </div>
+            <div class="help-tooltip" id="pm25Help">
+                <h4>PM2.5说明</h4>
+                <p>PM2.5是指空气中直径小于2.5微米的颗粒物。</p>
+                <p>这些微小颗粒可以进入肺部，影响呼吸系统健康。</p>
+                <div class="safe-range">
+                    <p>安全范围：</p>
+                    <p>优：<span>0-35μg/m³</span></p>
+                    <p>良：<span>35-75μg/m³</span></p>
+                    <p>差：<span>>75μg/m³</span></p>
+                </div>
+            </div>
+            <div class="sensor-icon">
+                <i class="ri-cloud-line"></i>
+            </div>
+            <div class="value-display">
+                <span id="pm25">--</span><span class="unit">μg/m³</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="pm25Chart"></canvas>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">平均值</div>
+                    <div class="stat-value" id="avgPM25">--</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">最高值</div>
+                    <div class="stat-value" id="maxPM25">--</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 历史数据模态框 -->
+    <div id="historyModal" class="modal">
+        <div class="modal-content">
+            <i class="ri-close-line modal-close" id="modalClose"></i>
+            <h3 class="modal-title" id="modalTitle">历史数据</h3>
+            <div class="modal-chart">
+                <canvas id="historyChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载动画 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notificationContainer"></div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
